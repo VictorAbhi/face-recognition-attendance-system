@@ -6,6 +6,8 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+
+from Dataset import FaceCollector
 from attendance_logger import AttendanceLogger
 
 

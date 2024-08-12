@@ -1,7 +1,8 @@
 import os
-import csv
 from datetime import datetime
 import time
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 
 
 class AttendanceLogger:
@@ -16,17 +17,34 @@ class AttendanceLogger:
     def log_attendance(self, name):
         ts = time.time()
         date = datetime.fromtimestamp(ts).strftime("%d-%m-%y")
-        timestamp = datetime.fromtimestamp(ts).strftime("%H:%M-%S")
+        timestamp = datetime.fromtimestamp(ts).strftime("%H:%M:%S")
 
         attendance = [name, timestamp]
-        attendance_file = os.path.join(self.attendance_dir, f'Attendance_{date}.csv')
+        attendance_file = os.path.join(self.attendance_dir, f'Attendance_{date}.xlsx')
 
         if os.path.isfile(attendance_file):
-            with open(attendance_file, 'a', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(attendance)
+            workbook = load_workbook(attendance_file)
+            sheet = workbook.active
         else:
-            with open(attendance_file, 'w', newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(self.col_names)
-                writer.writerow(attendance)
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.append(self.col_names)  # Write the header only if file doesn't exist
+
+        # Append the new attendance record
+        sheet.append(attendance)
+
+        # Auto-size columns
+        for col in sheet.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(cell.value)
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            sheet.column_dimensions[column].width = adjusted_width
+
+        # Save the workbook
+        workbook.save(attendance_file)

@@ -2,10 +2,11 @@ import cv2
 import numpy as np
 import os
 import pickle
-
+import tkinter as tk
+from tkinter import messagebox
 
 class FaceCollector:
-    def __init__(self, name, haarcascade_path="haarcascade_frontalface_default.xml", data_dir='data', max_faces=60):
+    def __init__(self, name, haarcascade_path="haarcascade_frontalface_default.xml", data_dir='data', max_faces=70):
         self.name = name
         self.data_dir = data_dir
         self.max_faces = max_faces
@@ -44,14 +45,25 @@ class FaceCollector:
 
             cv2.imshow("frame", frame)
             k = cv2.waitKey(1)
+
+            # Check if the window is closed
+            if cv2.getWindowProperty("frame", cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+            # Break if the maximum number of faces is reached
             if len(self.face_data) >= self.max_faces:
                 break
+
             i += 1
 
         self.video.release()
         cv2.destroyAllWindows()
 
     def save_data(self):
+        if len(self.face_data) == 0:
+            print("No face data collected, nothing to save.")
+            return
+
         face_data_array = np.array(self.face_data)
         face_data_array = face_data_array.reshape((face_data_array.shape[0], -1))
 
@@ -59,7 +71,7 @@ class FaceCollector:
             os.makedirs(self.data_dir)
 
         names_path = os.path.join(self.data_dir, 'names.pkl')
-        if not os.path.isfile(names_path):
+        if not os.path.exists(names_path):
             names = [self.name] * len(self.face_data)
             with open(names_path, 'wb') as f:
                 pickle.dump(names, f)
@@ -71,7 +83,7 @@ class FaceCollector:
                 pickle.dump(names, f)
 
         faces_path = os.path.join(self.data_dir, 'face_data.pkl')
-        if not os.path.isfile(faces_path):
+        if not os.path.exists(faces_path):
             with open(faces_path, 'wb') as f:
                 pickle.dump(face_data_array, f)
         else:
@@ -80,6 +92,7 @@ class FaceCollector:
             updated_faces = np.vstack([existing_faces, face_data_array])
             with open(faces_path, 'wb') as f:
                 pickle.dump(updated_faces, f)
+
 
 if __name__ == "__main__":
     name = input("Enter your name: ")
