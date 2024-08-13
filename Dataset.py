@@ -2,46 +2,71 @@ import cv2
 import numpy as np
 import os
 import pickle
-import tkinter as tk
-from tkinter import messagebox
+import face_recognition
 
 class FaceCollector:
-    def __init__(self, name, haarcascade_path="haarcascade_frontalface_default.xml", data_dir='data', max_faces=70):
+    def __init__(self, name, data_dir='data', max_faces=100):
         self.name = name
         self.data_dir = data_dir
         self.max_faces = max_faces
         self.face_data = []
-        self.haarcascade_path = haarcascade_path
-        # Initialize video capture and face detection
+        # Initialize video capture
         self.video = cv2.VideoCapture(0)
-        self.facedetect = cv2.CascadeClassifier(cv2.data.haarcascades + haarcascade_path)
 
     def augment_data(self, image):
-        """Augment data by rotating and shifting."""
+        """Augment data using various techniques: rotation, flipping, noise, lighting adjustments, etc."""
         augmented_images = []
-        for angle in [0, 15, -15]:
-            M = cv2.getRotationMatrix2D((25, 25), angle, 1.0)
-            rotated_img = cv2.warpAffine(image, M, (50, 50))
+
+        # Original image
+        augmented_images.append(image)
+
+        # Rotation
+        for angle in [15, -15, 30, -30]:
+            M = cv2.getRotationMatrix2D((image.shape[1] // 2, image.shape[0] // 2), angle, 1.0)
+            rotated_img = cv2.warpAffine(image, M, (image.shape[1], image.shape[0]))
             augmented_images.append(rotated_img)
+
+        # Flipping (0: vertical, 1: horizontal, -1: both axes)
+        for flip_code in [0, 1, -1]:
+            flipped_img = cv2.flip(image, flip_code)
+            augmented_images.append(flipped_img)
+
+        # Adding Gaussian noise
+        def add_gaussian_noise(img, mean=0, std=10):
+            noise = np.random.normal(mean, std, img.shape).astype(np.uint8)
+            noisy_img = cv2.add(img, noise)
+            return noisy_img
+
+        augmented_images.append(add_gaussian_noise(image))
+
+        # Lighting variations: adjust brightness and contrast
+        for alpha in [0.8, 1.2]:  # Alpha controls brightness
+            for beta in [-10, 10]:  # Beta controls contrast
+                adjusted_img = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+                augmented_images.append(adjusted_img)
+
         return augmented_images
 
     def collect_faces(self):
         i = 0
         while True:
             ret, frame = self.video.read()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.facedetect.detectMultiScale(gray, 1.3, 5)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            face_locations = face_recognition.face_locations(rgb_frame)
 
-            for (x, y, w, h) in faces:
-                crop_img = frame[y:y + h, x:x + w]
-                resized_img = cv2.resize(crop_img, (50, 50))
-                augmented_imgs = self.augment_data(resized_img)
+            for (top, right, bottom, left) in face_locations:
+                crop_img = rgb_frame[top:bottom, left:right]
+                resized_img = cv2.resize(crop_img, (50, 50))  # Resize to the desired dimension
+
+                # Convert the image to grayscale (optional, if needed for augmentation)
+                resized_img_gray = cv2.cvtColor(resized_img, cv2.COLOR_RGB2GRAY)
+
+                augmented_imgs = self.augment_data(resized_img_gray)
 
                 if len(self.face_data) < self.max_faces and i % 10 == 0:
-                    self.face_data.extend(augmented_imgs)
-                    cv2.putText(frame, str(len(self.face_data)), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (50, 50, 255),
-                                1)
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (50, 50, 255), 1)
+                    self.face_data.extend([img.flatten() for img in augmented_imgs])
+                    cv2.putText(frame, str(len(self.face_data)), (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (50, 50, 255), 1)
+                    cv2.rectangle(frame, (left, top), (right, bottom), (50, 50, 255), 1)
 
             cv2.imshow("frame", frame)
             k = cv2.waitKey(1)
@@ -92,7 +117,6 @@ class FaceCollector:
             updated_faces = np.vstack([existing_faces, face_data_array])
             with open(faces_path, 'wb') as f:
                 pickle.dump(updated_faces, f)
-
 
 if __name__ == "__main__":
     name = input("Enter your name: ")
